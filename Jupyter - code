@@ -1,0 +1,153 @@
+# ================================
+# 1. INSTALL REQUIRED LIBRARIES
+# ================================
+!pip install tensorflow matplotlib numpy scikit-learn
+
+# ================================
+# 2. IMPORT LIBRARIES
+# ================================
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import EfficientNetB0
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.optimizers import Adam
+
+from sklearn.metrics import classification_report, confusion_matrix
+
+# ================================
+# 3. SET PATHS & PARAMETERS
+# ================================
+TRAIN_DIR = "dataset/train"
+VAL_DIR = "dataset/val"
+
+IMG_SIZE = (224, 224)
+BATCH_SIZE = 32
+EPOCHS = 20
+
+# ================================
+# 4. DATA AUGMENTATION
+# ================================
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    rotation_range=25,
+    zoom_range=0.2,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    horizontal_flip=True
+)
+
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    TRAIN_DIR,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode="categorical"
+)
+
+val_generator = val_datagen.flow_from_directory(
+    VAL_DIR,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode="categorical",
+    shuffle=False
+)
+
+NUM_CLASSES = train_generator.num_classes
+
+# ================================
+# 5. BUILD MODEL (TRANSFER LEARNING)
+# ================================
+base_model = EfficientNetB0(
+    include_top=False,
+    weights="imagenet",
+    input_shape=(224, 224, 3)
+)
+
+base_model.trainable = False   # Freeze pretrained layers
+
+model = Sequential([
+    base_model,
+    GlobalAveragePooling2D(),
+    Dropout(0.3),
+    Dense(NUM_CLASSES, activation="softmax")
+])
+
+model.compile(
+    optimizer=Adam(),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.summary()
+
+# ================================
+# 6. TRAIN MODEL
+# ================================
+history = model.fit(
+    train_generator,
+    validation_data=val_generator,
+    epochs=EPOCHS
+)
+
+# ================================
+# 7. PLOT ACCURACY & LOSS
+# ================================
+plt.figure(figsize=(12,4))
+
+plt.subplot(1,2,1)
+plt.plot(history.history["accuracy"], label="Train Accuracy")
+plt.plot(history.history["val_accuracy"], label="Val Accuracy")
+plt.legend()
+plt.title("Accuracy")
+
+plt.subplot(1,2,2)
+plt.plot(history.history["loss"], label="Train Loss")
+plt.plot(history.history["val_loss"], label="Val Loss")
+plt.legend()
+plt.title("Loss")
+
+plt.show()
+
+# ================================
+# 8. MODEL EVALUATION
+# ================================
+val_generator.reset()
+predictions = model.predict(val_generator)
+predicted_classes = np.argmax(predictions, axis=1)
+
+print("Classification Report:\n")
+print(classification_report(
+    val_generator.classes,
+    predicted_classes,
+    target_names=list(val_generator.class_indices.keys())
+))
+
+# ================================
+# 9. FINE-TUNING (BOOST ACCURACY)
+# ================================
+base_model.trainable = True
+
+model.compile(
+    optimizer=Adam(learning_rate=1e-5),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+fine_history = model.fit(
+    train_generator,
+    validation_data=val_generator,
+    epochs=10
+)
+
+# ================================
+# 10. SAVE MODEL
+# ================================
+model.save("dangerous_insects_classifier.h5")
+
+print("✅ Model saved successfully!")
