@@ -8,8 +8,8 @@ Used EfficientNetB0 pre-trained on ImageNet for feature extraction
 
 🛠️ Technologies & Libraries Used
 
-Python
-TensorFlow / Keras
-NumPy
-Matplotlib
+Python |
+TensorFlow / Keras |
+NumPy |
+Matplotlib |
 Scikit-learn
